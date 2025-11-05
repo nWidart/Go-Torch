@@ -9,8 +9,8 @@ export type StatsPanelProps = {
 }
 
 const fmtMoney = (n: number | undefined | null, digits = 2) => {
-  if (!n || !isFinite(n)) return '—'
-  return n.toFixed(digits)
+  if (n === undefined || n === null || !isFinite(n as number)) return '—'
+  return (n as number).toFixed(digits)
 }
 
 export default function StatsPanel({ state }: StatsPanelProps) {

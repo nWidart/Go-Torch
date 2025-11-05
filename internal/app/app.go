@@ -413,7 +413,7 @@ func (a *App) UIState() UIState {
 		recent = append(recent, UIEvent{Time: ev.Time.UnixMilli(), Kind: ev.Kind.String()})
 	}
 	return UIState{
-		InMap:         st.InMap && st.Current.Active,
+		InMap:         st.InMap,
 		SessionStart:  sessionStartMs,
 		SessionEnd:    sessionEndMs,
 		SessionPaused: paused,
