@@ -17,16 +17,26 @@ import (
 )
 
 func main() {
-	logPath := flag.String("log", "", "Path to Torchlight Infinite log file")
-	fromStart := flag.Bool("from-start", false, "Read from start instead of tailing from end")
-	pollMs := flag.Int("poll-ms", 300, "Polling interval in milliseconds")
-	debug := flag.Bool("debug", true, "Print parsed events and errors")
-	once := flag.Bool("once", false, "Process the file once and exit (no live tail)")
-	flag.Parse()
+	os.Exit(run(os.Args[1:]))
+}
+
+// run is the testable entrypoint for the CLI. It returns an exit code rather than exiting directly.
+func run(args []string) int {
+	fs := flag.NewFlagSet("cli", flag.ContinueOnError)
+	fs.SetOutput(os.Stdout)
+	logPath := fs.String("log", "", "Path to Torchlight Infinite log file")
+	fromStart := fs.Bool("from-start", false, "Read from start instead of tailing from end")
+	pollMs := fs.Int("poll-ms", 300, "Polling interval in milliseconds")
+	debug := fs.Bool("debug", true, "Print parsed events and errors")
+	once := fs.Bool("once", false, "Process the file once and exit (no live tail)")
+	if err := fs.Parse(args); err != nil {
+		fmt.Println("Usage: cli --log <path> [--from-start] [--poll-ms N] [--debug] [--once]")
+		return 2
+	}
 
 	if *logPath == "" {
 		fmt.Println("Usage: cli --log <path> [--from-start] [--poll-ms N] [--debug] [--once]")
-		os.Exit(2)
+		return 2
 	}
 
 	// Resolve env vars in path (Windows %USERPROFILE%, etc.)
@@ -41,10 +51,10 @@ func main() {
 	if *once {
 		if err := processOnce(*logPath, p, trk, *debug); err != nil {
 			fmt.Println("error:", err)
-			os.Exit(1)
+			return 1
 		}
 		printState(trk)
-		return
+		return 0
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -89,6 +99,7 @@ func main() {
 	if err := scanner.Err(); err != nil && ctx.Err() == nil {
 		fmt.Println("scanner error:", err)
 	}
+	return 0
 }
 
 func processOnce(path string, p *parser.Parser, trk *tracker.Tracker, debug bool) error {
