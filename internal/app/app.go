@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"GoTorch/internal/parser"
+	"GoTorch/internal/pricing"
 	"GoTorch/internal/tailer"
 	"GoTorch/internal/tracker"
 
@@ -40,6 +41,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	// Load item metadata table on startup
 	a.loadItemTable()
+	// Refresh prices from remote endpoint with a short timeout; ignore errors.
+	a.refreshPrices()
 }
 
 // Shutdown is called by Wails when the app terminates.
@@ -362,4 +365,34 @@ func strconvItoa(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// refreshPrices fetches remote pricing and merges price + last_update into the in-memory items.
+func (a *App) refreshPrices() {
+	if a.ctx == nil || a.items == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	updates, err := pricing.FetchRemotePrices(ctx, "")
+	if err != nil {
+		runtime.LogWarningf(a.ctx, "price refresh failed: %v", err)
+		return
+	}
+	var changed int
+	var total int
+	a.mu.Lock()
+	for id, u := range updates {
+		total++
+		if info, ok := a.items[id]; ok {
+			if info.Price != u.Price || info.LastUpdate != u.LastUpdate {
+				info.Price = u.Price
+				info.LastUpdate = u.LastUpdate
+				a.items[id] = info
+				changed++
+			}
+		}
+	}
+	a.mu.Unlock()
+	runtime.LogInfof(a.ctx, "price refresh: %d updated (from %d remote items)", changed, total)
 }
