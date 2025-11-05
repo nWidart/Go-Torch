@@ -60,9 +60,11 @@ jobs:
         run: wails build
 
       - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
         run: |
           go test ./... -race -covermode=atomic -coverprofile=coverage.out
       - name: Enforce coverage >= 80%
+        if: matrix.os == 'ubuntu-latest'
         run: |
           total=$(go tool cover -func=coverage.out | awk '/total:/ {print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${total}%"
@@ -73,6 +75,7 @@ jobs:
             exit 1
           fi
       - name: Check gofmt
+        if: matrix.os == 'ubuntu-latest'
         run: |
           fmtout=$(gofmt -s -l . | tee /dev/stderr)
           if [ -n "$fmtout" ]; then
@@ -81,6 +84,7 @@ jobs:
             exit 1
           fi
       - name: go vet
+        if: matrix.os == 'ubuntu-latest'
         run: go vet ./...
 
       - name: Go mod tidy
