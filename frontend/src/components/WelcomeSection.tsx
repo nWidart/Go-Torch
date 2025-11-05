@@ -18,8 +18,6 @@ export default function WelcomeSection(props: WelcomeSectionProps) {
     <section style={card}>
       <h2 style={h2}>Welcome</h2>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label>User ID:</label>
-        <input value={uid} onChange={e => onUidChange(e.target.value)} placeholder="Enter user id (no-op)" style={inputStyle} />
         <label>Log Path:</label>
         <button onClick={() => selectLogFile()}>Select log file</button>
         <input value={logPath} onChange={e => onLogPathChange(e.target.value)} placeholder="Select or paste UE_game.log path" style={inputStyle} />
