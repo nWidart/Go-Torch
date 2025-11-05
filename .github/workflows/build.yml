@@ -100,14 +100,6 @@ jobs:
           $gui = Get-ChildItem *.exe | Where-Object { $_.Name -notlike "*cli*" } | Select-Object -First 1
           Compress-Archive -Path $gui.Name -DestinationPath "$($gui.BaseName).zip"
 
-      # Package macOS .app
-      - name: Package macOS .app
-        if: matrix.os == 'macos-latest'
-        run: |
-          cd build/bin
-          APP=$(ls *.app | head -n 1)
-          zip -r "${APP}.zip" "${APP}"
-
       - name: Upload artifacts
         if: steps.wails-build.outcome == 'success' && steps.package-windows-exe.outcome == 'success'
         uses: actions/upload-artifact@v4
