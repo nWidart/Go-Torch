@@ -43,7 +43,7 @@ jobs:
           GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli-${GOOS}-${GOARCH} ./cmd/cli
 
       - name: Build wails
-        uses: dAppServer/wails-build-action@v3
+        uses: dAppServer/wails-build-action@v2
         id: build
         with:
           build-name: ${{ matrix.build.name }}
