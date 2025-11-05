@@ -199,22 +199,29 @@ func (a *App) GetState() UIState {
 // UIState converts internal tracker state to a JSON-friendly struct for the UI.
 func (a *App) UIState() UIState {
 	st := a.trk.GetState()
-	// Build UI tally by enriching with metadata and skipping unknowns
+	// Build UI tally by enriching with metadata; include unknown IDs as placeholders
 	uiTally := make(map[string]UITallyItem)
 	for id, n := range st.Current.Tally {
 		key := intToStr(id)
-		if a.items == nil {
-			continue
-		}
-		if info, ok := a.items[key]; ok {
-			uiTally[key] = UITallyItem{
-				Name:       info.Name,
-				Type:       info.Type,
-				Price:      info.Price,
-				LastUpdate: info.LastUpdate,
-				From:       info.From,
-				Count:      n,
+		if a.items != nil {
+			if info, ok := a.items[key]; ok {
+				uiTally[key] = UITallyItem{
+					Name:       info.Name,
+					Type:       info.Type,
+					Price:      info.Price,
+					LastUpdate: info.LastUpdate,
+					From:       info.From,
+					Count:      n,
+				}
+				continue
 			}
+		}
+		// Fallback: show unknown IDs so the tally is visible even without item table
+		uiTally[key] = UITallyItem{
+			Name:  "#" + key,
+			Type:  "Unknown",
+			Price: 0,
+			Count: n,
 		}
 	}
 	// Compute per-map earnings for completed maps + current

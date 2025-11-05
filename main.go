@@ -23,9 +23,6 @@ func buildRootAppOptions(app *app2.App) *options.App {
 		OnStartup:   func(ctx context.Context) { app.Startup(ctx) },
 		OnShutdown:  func(ctx context.Context) { app.Shutdown(ctx) },
 		Bind:        []interface{}{app},
-		Debug: options.Debug{
-			OpenInspectorOnStartup: true,
-		},
 	}
 }
 
