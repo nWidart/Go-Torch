@@ -1,0 +1,21 @@
+{
+  "name": "GoTorch",
+  "author": {
+    "name": "Nicolas Widart",
+    "email": ""
+  },
+  "version": "0.1.0",
+  "wailsjsdir": "frontend/wailsjs",
+  "build": {
+    "assets": "frontend/dist",
+    "frontendDir": "frontend",
+    "install": "npm install",
+    "build": "npm run build",
+    "devServerURL": "http://localhost:5173"
+  },
+  "info": {
+    "companyName": "",
+    "productName": "GoTorch",
+    "comments": "Torchlight Infinite Tracker"
+  }
+}

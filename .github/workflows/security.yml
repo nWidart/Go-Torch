@@ -1,0 +1,36 @@
+name: Security
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  gosec:
+    name: Go security scan (gosec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec (fail on high severity)
+        run: |
+          $(go env GOPATH)/bin/gosec -severity high -confidence high ./...
+  frontend_audit:
+    name: Frontend npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+      - name: npm audit (non-blocking)
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=high || true
