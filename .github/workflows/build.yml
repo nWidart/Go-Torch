@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
+  # optional: limit runs to relevant paths to save CI minutes
+  # paths:
+  #   - 'cmd/**'
+  #   - 'frontend/**'
+  #   - 'go.mod'
+  #   - '.github/workflows/**'
 
 jobs:
   build:
@@ -13,44 +19,77 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # --- Cache Go modules ---
+      - name: Cache Go modules
+        uses: actions/cache@v4
         with:
-          node-version: '20'
+          # common paths for go modules & build cache
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
+
+      # --- Cache NPM (via setup-node cache) ---
+      - name: Setup Node (and enable cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'     # uses setup-node's cache support for npm/yarn/pnpm
 
       - name: Go mod tidy
         run: go mod tidy
 
-      - name: Build CLI binary
-        shell: bash
+      # Build CLI: split to make the commands compatible with the runner shell
+      - name: Build CLI (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p build/bin
-          GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli-${GOOS}-${GOARCH} ./cmd/cli
+          # produce a (Unix) executable
+          go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli ./cmd/cli
 
-      - name: Install GTK and Webkit dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev libglib2.0-dev gcc-aarch64-linux-gnu
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\bin
+          go build -trimpath -ldflags="-s -w" -o build\bin\gotorch-cli.exe ./cmd/cli
+
+      # Only on Ubuntu: install GTK/WebKit native deps
+      - name: Install GTK and WebKit dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev libglib2.0-dev gcc-aarch64-linux-gnu
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm install
+        working-directory: frontend
+        run: npm ci
 
-      - name: Build
+      - id: wails-build
+        name: Build Wails app
         run: wails build
 
+      # Upload artifacts only after build step runs (checks outcome)
       - name: Upload artifacts
+        if: steps.wails-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: gotorch-${{ matrix.os }}
           path: |
             build/bin/
+          retention-days: 7
