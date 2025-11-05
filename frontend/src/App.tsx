@@ -79,9 +79,33 @@ export default function App() {
     }
   }
 
+  const running = !!(state && state.sessionStart && !state.sessionEnd)
+  const paused = !!state?.sessionPaused
+
+  const stopTracking = async () => {
+    if (!hasRuntime()) return
+    try { await getBackend()?.Stop() } catch (e) { console.error(e) }
+  }
+  const pauseSession = async () => {
+    if (!hasRuntime()) return
+    try { await (getBackend()?.PauseSession?.() as any) } catch (e) { console.error(e) }
+  }
+  const resumeSession = async () => {
+    if (!hasRuntime()) return
+    try { await (getBackend()?.ResumeSession?.() as any) } catch (e) { console.error(e) }
+  }
+
   return (
     <div style={{ fontFamily: 'Inter, system-ui, Arial', padding: 24, color: '#e2e8f0', background: '#0f172a', minHeight: '100vh' }}>
-      <HeaderBar onStart={startTracking} onReset={reset} />
+      <HeaderBar
+        running={running}
+        paused={paused}
+        onStart={startTracking}
+        onStop={stopTracking}
+        onPause={pauseSession}
+        onResume={resumeSession}
+        onReset={reset}
+      />
 
       <WelcomeSection
         uid={uid}
@@ -90,7 +114,12 @@ export default function App() {
         onLogPathChange={setLogPath}
         readFromStart={readFromStart}
         onToggleReadFromStart={setReadFromStart}
+        running={running}
+        paused={paused}
         onStart={startTracking}
+        onStop={stopTracking}
+        onPause={pauseSession}
+        onResume={resumeSession}
         selectLogFile={selectLogFile}
       />
 

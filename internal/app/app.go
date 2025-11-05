@@ -28,6 +28,18 @@ type App struct {
 	cancel   context.CancelFunc
 	emitStop context.CancelFunc
 
+	// tracking lifecycle timestamps & pause state (app-level session control)
+	trackStartedAt   time.Time
+	trackStoppedAt   time.Time
+	trackPaused      bool
+	trackPausedAt    time.Time
+	trackPausedAccum time.Duration
+	lastEventAt      time.Time // last parsed event time, used to clamp durations when parsing old logs
+
+	// baseline of current map tally at the moment the session started (if session started mid‑map)
+	baselineTally    map[int]int
+	baselineMapStart time.Time
+
 	// item table loaded from full_table.json (or embedded fallback)
 	items       map[string]ItemInfo
 	itemsSource string // diagnostic: where items were loaded from
@@ -133,6 +145,24 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 		a.emitStop()
 		a.emitStop = nil
 	}
+	// mark session start now; clear pause/stop state
+	a.trackStartedAt = time.Now()
+	a.trackStoppedAt = time.Time{}
+	a.trackPaused = false
+	a.trackPausedAt = time.Time{}
+	a.trackPausedAccum = 0
+	// snapshot baseline tally if we are already in a map when starting (e.g., starting mid‑map)
+	st0 := a.trk.GetState()
+	if st0.InMap && st0.Current.Tally != nil {
+		a.baselineTally = make(map[int]int, len(st0.Current.Tally))
+		for id, c := range st0.Current.Tally {
+			a.baselineTally[id] = c
+		}
+		a.baselineMapStart = st0.Current.StartedAt
+	} else {
+		a.baselineTally = nil
+		a.baselineMapStart = time.Time{}
+	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancel = cancel
@@ -156,6 +186,9 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 				}
 				if ev := a.p.Parse(line); ev != nil {
 					a.trk.OnEvent(ev)
+					a.mu.Lock()
+					a.lastEventAt = ev.Time
+					a.mu.Unlock()
 				}
 			}
 		}
@@ -182,7 +215,7 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 	return nil
 }
 
-// Stop tracking and background goroutines.
+// Stop tracking and background goroutines. Also marks the session as stopped.
 func (a *App) Stop() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -197,6 +230,17 @@ func (a *App) Stop() {
 	if a.t != nil {
 		a.t.Stop()
 	}
+	// finalize pause accumulation if paused
+	now := time.Now()
+	if a.trackPaused && !a.trackPausedAt.IsZero() {
+		a.trackPausedAccum += now.Sub(a.trackPausedAt)
+		a.trackPaused = false
+		a.trackPausedAt = time.Time{}
+	}
+	// mark stopped
+	if !a.trackStartedAt.IsZero() && a.trackStoppedAt.IsZero() {
+		a.trackStoppedAt = now
+	}
 }
 
 // Reset clears the current tracker state (does not stop tracking).
@@ -204,6 +248,39 @@ func (a *App) Reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.trk = tracker.New()
+	// also reset session timing state
+	a.trackStartedAt = time.Time{}
+	a.trackStoppedAt = time.Time{}
+	a.trackPaused = false
+	a.trackPausedAt = time.Time{}
+	a.trackPausedAccum = 0
+	// clear any baseline captured at session start
+	a.baselineTally = nil
+	a.baselineMapStart = time.Time{}
+}
+
+// PauseSession pauses the app-level session timer.
+func (a *App) PauseSession() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.trackStartedAt.IsZero() || a.trackPaused || !a.trackStoppedAt.IsZero() {
+		return
+	}
+	a.trackPaused = true
+	a.trackPausedAt = time.Now()
+}
+
+// ResumeSession resumes the app-level session timer.
+func (a *App) ResumeSession() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.trackPaused || a.trackPausedAt.IsZero() {
+		return
+	}
+	now := time.Now()
+	a.trackPausedAccum += now.Sub(a.trackPausedAt)
+	a.trackPaused = false
+	a.trackPausedAt = time.Time{}
 }
 
 // SelectLogFile opens a file dialog and returns the selected log file path.
@@ -228,6 +305,16 @@ func (a *App) GetState() UIState {
 // UIState converts internal tracker state to a JSON-friendly struct for the UI.
 func (a *App) UIState() UIState {
 	st := a.trk.GetState()
+	// snapshot app-level session fields
+	a.mu.Lock()
+	startedAt := a.trackStartedAt
+	stoppedAt := a.trackStoppedAt
+	paused := a.trackPaused
+	pausedAt := a.trackPausedAt
+	pausedAccum := a.trackPausedAccum
+	lastEv := a.lastEventAt
+	a.mu.Unlock()
+
 	// Build UI tally by enriching with metadata; include unknown IDs as placeholders
 	uiTally := make(map[string]UITallyItem)
 	for id, n := range st.Current.Tally {
@@ -258,6 +345,10 @@ func (a *App) UIState() UIState {
 	var sessionEarnings float64
 	var totalMapDurMs int64
 	for _, m := range st.Completed {
+		// only include maps that belong to this session (started after we clicked start), unless session not started
+		if !startedAt.IsZero() && m.StartedAt.Before(startedAt) {
+			continue
+		}
 		var earn float64
 		for id, c := range m.Tally {
 			key := intToStr(id)
@@ -278,35 +369,62 @@ func (a *App) UIState() UIState {
 			currentEarn += float64(c) * info.Price
 		}
 	}
-	// include current map as last entry only if active (avoid duplicating a completed current)
-	if st.Current.Active && !st.Current.StartedAt.IsZero() {
+	// include current map as last entry only if active and belongs to this session
+	includedCurrent := false
+	if st.Current.Active && !st.Current.StartedAt.IsZero() && (startedAt.IsZero() || !st.Current.StartedAt.Before(startedAt)) {
 		end := time.Now()
+		if !lastEv.IsZero() && lastEv.After(st.Current.StartedAt) {
+			end = lastEv // clamp to last event time to avoid huge durations when parsing old logs
+		}
 		durMs := end.Sub(st.Current.StartedAt).Milliseconds()
 		maps = append(maps, UIMap{Start: st.Current.StartedAt.UnixMilli(), End: 0, DurationMs: durMs, Earnings: currentEarn})
+		includedCurrent = true
 	}
-	sessionEarnings += currentEarn
-	// compute earnings per hour over session duration
+	if includedCurrent {
+		sessionEarnings += currentEarn
+	}
+	// compute earnings per hour over session active time (excluding pauses)
 	var sessionStartMs int64
-	var sessionEndMs int64
-	if !st.SessionStartedAt.IsZero() {
-		sessionStartMs = st.SessionStartedAt.UnixMilli()
-		if !st.SessionEndedAt.IsZero() && !st.Current.Active {
-			sessionEndMs = st.SessionEndedAt.UnixMilli()
+	var sessionEndMs int64 // exported end timestamp; 0 while session is active (running or paused)
+	var pausedAccumMs int64
+	var calcEndMs int64
+	if !startedAt.IsZero() {
+		sessionStartMs = startedAt.UnixMilli()
+		pausedAccumMs = pausedAccum.Milliseconds()
+
+		// Determine end timestamp for calculations
+		if !stoppedAt.IsZero() {
+			calcEndMs = stoppedAt.UnixMilli()
+			sessionEndMs = stoppedAt.UnixMilli()
+		} else if paused && !pausedAt.IsZero() {
+			calcEndMs = pausedAt.UnixMilli()
+			sessionEndMs = 0
 		} else {
-			sessionEndMs = time.Now().UnixMilli()
+			calcEndMs = time.Now().UnixMilli()
+			sessionEndMs = 0
 		}
 	}
 	var eph float64
-	if sessionStartMs > 0 && sessionEndMs > sessionStartMs {
-		durH := float64(sessionEndMs-sessionStartMs) / 3600000.0
-		if durH > 0 {
-			eph = sessionEarnings / durH
+	if sessionStartMs > 0 && calcEndMs > sessionStartMs {
+		durActiveMs := (calcEndMs - sessionStartMs) - pausedAccumMs
+		if durActiveMs > 0 {
+			eph = sessionEarnings / (float64(durActiveMs) / 3600000.0)
 		}
 	}
-	// average time per completed map
+	// average time per completed map (only those included)
 	var avgMapMs int64
-	if len(st.Completed) > 0 {
-		avgMapMs = totalMapDurMs / int64(len(st.Completed))
+	if len(maps) > 0 {
+		// compute from maps that have end>0 (completed)
+		var cnt int64
+		for _, m := range maps {
+			if m.End > 0 {
+				avgMapMs += m.DurationMs
+				cnt++
+			}
+		}
+		if cnt > 0 {
+			avgMapMs = avgMapMs / cnt
+		}
 	}
 	// convert recent events
 	recent := make([]UIEvent, 0, len(st.LastEvents))
@@ -314,9 +432,17 @@ func (a *App) UIState() UIState {
 		recent = append(recent, UIEvent{Time: ev.Time.UnixMilli(), Kind: ev.Kind.String()})
 	}
 	return UIState{
-		InMap:              st.InMap && st.Current.Active,
-		SessionStart:       sessionStartMs,
-		SessionEnd:         sessionEndMs,
+		InMap:         st.InMap,
+		SessionStart:  sessionStartMs,
+		SessionEnd:    sessionEndMs,
+		SessionPaused: paused,
+		PausedAt: func() int64 {
+			if paused {
+				return pausedAt.UnixMilli()
+			}
+			return int64(0)
+		}(),
+		PausedAccumMs:      pausedAccumMs,
 		MapStart:           st.Current.StartedAt.UnixMilli(),
 		MapEnd:             st.Current.EndedAt.UnixMilli(),
 		TotalDrops:         st.TotalDrops,
@@ -359,6 +485,9 @@ type UIState struct {
 	InMap              bool                   `json:"inMap"`
 	SessionStart       int64                  `json:"sessionStart"`
 	SessionEnd         int64                  `json:"sessionEnd"`
+	SessionPaused      bool                   `json:"sessionPaused"`
+	PausedAt           int64                  `json:"pausedAt"`
+	PausedAccumMs      int64                  `json:"pausedAccumMs"`
 	MapStart           int64                  `json:"mapStart"`
 	MapEnd             int64                  `json:"mapEnd"`
 	TotalDrops         int                    `json:"totalDrops"`

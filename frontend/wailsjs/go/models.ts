@@ -58,6 +58,9 @@ export namespace app {
 	    inMap: boolean;
 	    sessionStart: number;
 	    sessionEnd: number;
+	    sessionPaused: boolean;
+	    pausedAt: number;
+	    pausedAccumMs: number;
 	    mapStart: number;
 	    mapEnd: number;
 	    totalDrops: number;
@@ -77,6 +80,9 @@ export namespace app {
 	        this.inMap = source["inMap"];
 	        this.sessionStart = source["sessionStart"];
 	        this.sessionEnd = source["sessionEnd"];
+	        this.sessionPaused = source["sessionPaused"];
+	        this.pausedAt = source["pausedAt"];
+	        this.pausedAccumMs = source["pausedAccumMs"];
 	        this.mapStart = source["mapStart"];
 	        this.mapEnd = source["mapEnd"];
 	        this.totalDrops = source["totalDrops"];

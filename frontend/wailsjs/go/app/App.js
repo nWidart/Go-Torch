@@ -6,8 +6,20 @@ export function GetState() {
   return window['go']['app']['App']['GetState']();
 }
 
+export function ItemTableSource() {
+  return window['go']['app']['App']['ItemTableSource']();
+}
+
+export function PauseSession() {
+  return window['go']['app']['App']['PauseSession']();
+}
+
 export function Reset() {
   return window['go']['app']['App']['Reset']();
+}
+
+export function ResumeSession() {
+  return window['go']['app']['App']['ResumeSession']();
 }
 
 export function SelectLogFile() {
