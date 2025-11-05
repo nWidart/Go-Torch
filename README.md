@@ -2,7 +2,7 @@
 
 GoTorch is a desktop app that monitors Torchlight Infinite's `UE_game.log`, detects map runs, and tallies item drops during each run.
 
-Download the latest release via the Actions tab. (_will be improved via released on stabilized_)
+Download the latest release via the Actions tab. (_will be improved via Releases once stabilized_)
 
 ![gotorch](screenshots/gotorch.png)
 
