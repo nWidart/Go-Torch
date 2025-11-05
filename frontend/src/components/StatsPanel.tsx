@@ -55,7 +55,7 @@ export default function StatsPanel({ state }: StatsPanelProps) {
               </tr>
             </thead>
             <tbody>
-              {lastMaps.map((m, idx) => {
+              {lastMaps.reverse().map((m, idx) => {
                 const dur = m.durationMs > 0 ? fmtDur(Date.now() - m.durationMs, Date.now()) : '—'
                 const i = maps.length - lastMaps.length + idx + 1
                 return (
