@@ -49,7 +49,7 @@ export default function StatsPanel({ state }: StatsPanelProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={th}>#</th>
+                <th style={th}>Map #</th>
                 <th style={th}>Earnings</th>
                 <th style={th}>Duration</th>
               </tr>
