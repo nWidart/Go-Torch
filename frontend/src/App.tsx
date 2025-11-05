@@ -100,8 +100,6 @@ export default function App() {
         <TallyTable tally={state?.tally} />
         <RecentEvents events={state?.recent} />
       </section>
-
-      <footer style={{ marginTop: 24, opacity: 0.7 }}>v0 — Parsing BagMgr deltas; mapping to names/prices will be added later.</footer>
     </div>
   )
 }
