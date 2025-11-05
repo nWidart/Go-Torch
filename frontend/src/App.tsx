@@ -36,6 +36,14 @@ export default function App() {
   const [uid, setUid] = useState('')
   const [state, setState] = useState<UIState | null>(null)
   const [logPath, setLogPath] = useState('')
+  const [readFromStart, setReadFromStart] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('readFromStart')
+      if (saved !== null) return saved === '1'
+    } catch {}
+    // Default: in dev, read old lines; in prod, tail only
+    return import.meta.env.DEV
+  })
 
   useEffect(() => {
     if (!hasRuntime()) return
@@ -54,14 +62,25 @@ export default function App() {
     try {
       let path = logPath
       if (!path) {
-        // basic file picker using Wails dialog
-        const rt = (window as any).runtime
-        const res = await rt.OpenFileDialog({ title: 'Select UE_game.log', filters: [{ pattern: '*.log' }] })
+        // Open file dialog via backend
+        const backend = (window as any).go?.app?.App
+        if (!backend) throw new Error('Backend not available')
+        const res = await backend.SelectLogFile()
         if (!res) return
         path = res
         setLogPath(res)
       }
-      await (window as any).backend.App.StartTracking(path)
+      // Persist preference
+      try { localStorage.setItem('readFromStart', readFromStart ? '1' : '0') } catch {}
+      const backend = (window as any).go?.app?.App
+      if (backend?.StartTrackingWithOptions) {
+        await backend.StartTrackingWithOptions(path, readFromStart)
+      } else if (backend?.StartTracking) {
+        // fallback: older backend without options will default to tailing from end
+        await backend.StartTracking(path)
+      } else {
+        throw new Error('Backend not available')
+      }
     } catch (e) {
       console.error(e)
       alert('Failed to start tracking: ' + e)
@@ -71,7 +90,7 @@ export default function App() {
   const reset = async () => {
     if (!hasRuntime()) return
     try {
-      await (window as any).backend.App.Reset()
+      await (window as any).go.app.App.Reset()
     } catch (e) {
       console.error(e)
     }
@@ -89,11 +108,15 @@ export default function App() {
 
       <section style={card}>
         <h2 style={h2}>Welcome</h2>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <label>User ID:</label>
           <input value={uid} onChange={e => setUid(e.target.value)} placeholder="Enter user id (no-op)" style={inputStyle} />
           <label>Log Path:</label>
           <input value={logPath} onChange={e => setLogPath(e.target.value)} placeholder="Select or paste UE_game.log path" style={inputStyle} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={readFromStart} onChange={e => setReadFromStart(e.target.checked)} />
+            <span>Read old lines (dev)</span>
+          </label>
           <button onClick={startTracking} style={btnStyle}>Start</button>
         </div>
       </section>

@@ -7,9 +7,13 @@ export function GetState():Promise<app.UIState>;
 
 export function Reset():Promise<void>;
 
+export function SelectLogFile():Promise<string>;
+
 export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function StartTracking(arg1:string):Promise<void>;
+
+export function StartTrackingWithOptions(arg1:string,arg2:boolean):Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
 

@@ -10,12 +10,20 @@ export function Reset() {
   return window['go']['app']['App']['Reset']();
 }
 
+export function SelectLogFile() {
+  return window['go']['app']['App']['SelectLogFile']();
+}
+
 export function Shutdown(arg1) {
   return window['go']['app']['App']['Shutdown'](arg1);
 }
 
 export function StartTracking(arg1) {
   return window['go']['app']['App']['StartTracking'](arg1);
+}
+
+export function StartTrackingWithOptions(arg1, arg2) {
+  return window['go']['app']['App']['StartTrackingWithOptions'](arg1, arg2);
 }
 
 export function Startup(arg1) {
