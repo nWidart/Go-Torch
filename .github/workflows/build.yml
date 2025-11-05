@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [ windows-latest, macos-latest ]
 
     steps:
       - name: Checkout
@@ -49,24 +49,6 @@ jobs:
           cache: 'npm'     # uses setup-node's cache support for npm/yarn/pnpm
           cache-dependency-path: 'frontend/package-lock.json'
 
-      - name: Go mod tidy
-        run: go mod tidy
-
-      # Build CLI: split to make the commands compatible with the runner shell
-      - name: Build CLI (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p build/bin
-          # produce a (Unix) executable
-          go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli ./cmd/cli
-
-      - name: Build CLI (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path build\bin
-          go build -trimpath -ldflags="-s -w" -o build\bin\gotorch-cli.exe ./cmd/cli
-
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
@@ -77,6 +59,25 @@ jobs:
       - id: wails-build
         name: Build Wails app
         run: wails build
+
+      - name: Go mod tidy
+        if: steps.wails-build.outcome == 'success'
+        run: go mod tidy
+
+      # Build CLI: split to make the commands compatible with the runner shell
+      - name: Build CLI (Linux/macOS)
+        if: runner.os != 'Windows' && steps.wails-build.outcome == 'success'
+        run: |
+          mkdir -p build/bin
+          # produce a (Unix) executable
+          go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli ./cmd/cli
+
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows' && steps.wails-build.outcome == 'success'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\bin
+          go build -trimpath -ldflags="-s -w" -o build\bin\gotorch-cli.exe ./cmd/cli
 
       # Upload artifacts only after build step runs (checks outcome)
       - name: Upload artifacts
