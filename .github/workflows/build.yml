@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -66,13 +66,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path build\bin
           go build -trimpath -ldflags="-s -w" -o build\bin\gotorch-cli.exe ./cmd/cli
-
-      # Only on Ubuntu: install GTK/WebKit native deps
-      - name: Install GTK and WebKit dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev libglib2.0-dev gcc-aarch64-linux-gnu
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
