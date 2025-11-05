@@ -9,8 +9,9 @@ go.work
 go.work.sum
 .env
 
+# Project
 frontend/node_modules
 frontend/dist
-
-# Project
+.idea
+build
 UE_game.log
