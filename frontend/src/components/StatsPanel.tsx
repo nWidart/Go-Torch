@@ -14,9 +14,31 @@ const fmtMoney = (n: number | undefined | null, digits = 2) => {
 }
 
 export default function StatsPanel({ state }: StatsPanelProps) {
-  const status = state?.inMap ? 'In Map' : 'Idle'
-  const sessionDur = useMemo(() => fmtDur(state?.sessionStart || 0, state?.inMap ? undefined : state?.sessionEnd), [state])
-  const mapDur = useMemo(() => fmtDur(state?.mapStart || 0, state?.inMap ? undefined : state?.mapEnd), [state])
+  const running = !!(state && state.sessionStart && !state.sessionEnd)
+  const status = state?.sessionPaused ? 'Paused' : (state?.inMap ? 'In Map' : (running ? 'Running' : 'Idle'))
+
+  const sessionDur = useMemo(() => {
+    const start = state?.sessionStart || 0
+    if (!start) return '0s'
+    const pausedAccum = state?.pausedAccumMs || 0
+    const end = state?.sessionEnd ? state.sessionEnd : (state?.sessionPaused ? state.pausedAt : undefined)
+    // Use start adjusted by past paused time; when paused, end=pausedAt so current pause not included
+    const startAdj = start + pausedAccum
+    return fmtDur(startAdj, end)
+  }, [state])
+
+  const mapDur = useMemo(() => {
+    if (!state) return '—'
+    if (state.inMap && state.maps?.length) {
+      const last = state.maps[state.maps.length - 1]
+      if (last?.durationMs) {
+        const now = Date.now()
+        return fmtDur(now - last.durationMs, now)
+      }
+    }
+    if (state.mapStart) return fmtDur(state.mapStart, state.mapEnd || undefined)
+    return '—'
+  }, [state])
 
   const eph = useMemo(() => fmtMoney(state?.earningsPerHour, 1), [state])
   const eps = useMemo(() => fmtMoney(state?.earningsPerSession, 2), [state])

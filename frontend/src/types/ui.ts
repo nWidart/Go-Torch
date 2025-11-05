@@ -20,6 +20,9 @@ export type UIState = {
   inMap: boolean
   sessionStart: number
   sessionEnd: number
+  sessionPaused: boolean
+  pausedAt: number
+  pausedAccumMs: number
   mapStart: number
   mapEnd: number
   totalDrops: number

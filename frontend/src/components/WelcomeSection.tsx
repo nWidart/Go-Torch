@@ -8,12 +8,18 @@ export type WelcomeSectionProps = {
   onLogPathChange: (v: string) => void
   readFromStart: boolean
   onToggleReadFromStart: (v: boolean) => void
+  running: boolean
+  paused: boolean
   onStart: () => void
+  onStop: () => void
+  onPause: () => void
+  onResume: () => void
   selectLogFile: () => void
 }
 
 export default function WelcomeSection(props: WelcomeSectionProps) {
-  const { uid, onUidChange, logPath, onLogPathChange, readFromStart, onToggleReadFromStart, onStart, selectLogFile } = props
+  const { uid, onUidChange, logPath, onLogPathChange, readFromStart, onToggleReadFromStart, running, paused, onStart, onStop, onPause, onResume, selectLogFile } = props
+  const dangerBtn: React.CSSProperties = { ...btnStyle, background: '#7f1d1d', borderColor: '#b91c1c' }
   return (
     <section style={card}>
       <h2 style={h2}>Welcome</h2>
@@ -25,7 +31,18 @@ export default function WelcomeSection(props: WelcomeSectionProps) {
           <input type="checkbox" checked={readFromStart} onChange={e => onToggleReadFromStart(e.target.checked)} />
           <span>Read old lines (dev)</span>
         </label>
-        <button onClick={onStart} style={btnStyle}>Start</button>
+        {!running ? (
+          <button onClick={onStart} style={btnStyle}>Start Session</button>
+        ) : (
+          <>
+            <button onClick={onStop} style={dangerBtn}>Stop Session</button>
+            {!paused ? (
+              <button onClick={onPause} style={btnStyle}>Pause</button>
+            ) : (
+              <button onClick={onResume} style={btnStyle}>Resume</button>
+            )}
+          </>
+        )}
       </div>
     </section>
   )

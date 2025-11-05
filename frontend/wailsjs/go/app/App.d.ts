@@ -5,7 +5,13 @@ import {context} from '../models';
 
 export function GetState():Promise<app.UIState>;
 
+export function ItemTableSource():Promise<string|number>;
+
+export function PauseSession():Promise<void>;
+
 export function Reset():Promise<void>;
+
+export function ResumeSession():Promise<void>;
 
 export function SelectLogFile():Promise<string>;
 
