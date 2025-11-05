@@ -55,9 +55,27 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Sync embedded item table (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cp full_table.json internal/app/data/full_table.json
+
+      - name: Sync embedded item table (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Copy-Item full_table.json internal/app/data/full_table.json
+
       - id: wails-build
         name: Build Wails app
         run: wails build
+
+      - name: Copy item table next to binaries (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Copy-Item full_table.json build\bin\
+
+      - name: Copy item table next to binaries (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cp full_table.json build/bin/
 
       - name: Run tests with coverage
         if: matrix.os == 'macos-latest'
@@ -98,7 +116,8 @@ jobs:
         run: |
           cd build\bin
           $gui = Get-ChildItem *.exe | Where-Object { $_.Name -notlike "*cli*" } | Select-Object -First 1
-          Compress-Archive -Path $gui.Name -DestinationPath "$($gui.BaseName).zip"
+          # include external full_table.json for override convenience
+          Compress-Archive -Path $gui.Name, 'full_table.json' -DestinationPath "$($gui.BaseName).zip"
 
       - name: Upload artifacts
         if: steps.wails-build.outcome == 'success' && steps.package-windows-exe.outcome == 'success'

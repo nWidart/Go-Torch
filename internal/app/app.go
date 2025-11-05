@@ -28,8 +28,9 @@ type App struct {
 	cancel   context.CancelFunc
 	emitStop context.CancelFunc
 
-	// item table loaded from full_table.json
-	items map[string]ItemInfo
+	// item table loaded from full_table.json (or embedded fallback)
+	items       map[string]ItemInfo
+	itemsSource string // diagnostic: where items were loaded from
 }
 
 func New() *App {
@@ -50,33 +51,61 @@ func (a *App) Shutdown(ctx context.Context) {
 	a.Stop()
 }
 
-// loadItemTable attempts to load full_table.json from common locations.
+// loadItemTable attempts to load full_table.json from common locations, with env override and embedded fallback.
 func (a *App) loadItemTable() {
-	paths := []string{"full_table.json"}
-	if wd, err := os.Getwd(); err == nil {
-		p := filepath.Join(wd, "full_table.json")
-		if p != paths[0] {
-			paths = append(paths, p)
-		}
-	}
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		paths = append(paths, filepath.Join(dir, "full_table.json"))
-	}
-	for _, p := range paths {
-		b, err := os.ReadFile(p)
+	// default to empty map
+	a.items = map[string]ItemInfo{}
+	a.itemsSource = "none"
+
+	readItemFile := func(path string) (map[string]ItemInfo, bool) {
+		b, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil, false
 		}
 		var m map[string]ItemInfo
-		if err := json.Unmarshal(b, &m); err != nil {
-			continue
+		if err := json.Unmarshal(b, &m); err != nil || len(m) == 0 {
+			return nil, false
 		}
-		a.items = m
-		return
+		return m, true
 	}
-	// fallback to empty map to avoid nil checks elsewhere
-	a.items = map[string]ItemInfo{}
+
+	// 1) Environment variable override
+	if p := os.Getenv("GOTORCH_ITEM_TABLE"); p != "" {
+		if m, ok := readItemFile(p); ok {
+			a.items = m
+			a.itemsSource = "env:" + p
+			goto DONE
+		}
+	}
+	// 2) Working directory
+	if m, ok := readItemFile("full_table.json"); ok {
+		a.items = m
+		a.itemsSource = "file:./full_table.json"
+		goto DONE
+	}
+	// 3) Executable directory
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		if m, ok := readItemFile(filepath.Join(dir, "full_table.json")); ok {
+			a.items = m
+			a.itemsSource = "exe_dir:full_table.json"
+			goto DONE
+		}
+	}
+	// 4) Embedded fallback
+	if b, err := readEmbeddedItemTable(); err == nil && len(b) > 0 {
+		var m map[string]ItemInfo
+		if err := json.Unmarshal(b, &m); err == nil && len(m) > 0 {
+			a.items = m
+			a.itemsSource = "embedded"
+			goto DONE
+		}
+	}
+
+DONE:
+	if a.isWailsContext() {
+		runtime.LogInfof(a.ctx, "item table loaded (%d items) from %s", len(a.items), a.itemsSource)
+	}
 }
 
 // StartTracking starts tailing the given log path and emitting state updates to the UI.
@@ -344,6 +373,13 @@ type UIState struct {
 type UIEvent struct {
 	Time int64  `json:"time"`
 	Kind string `json:"kind"`
+}
+
+// ItemTableSource returns the source used to load the item table and item count.
+func (a *App) ItemTableSource() (string, int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.itemsSource, len(a.items)
 }
 
 func intToStr(n int) string {
