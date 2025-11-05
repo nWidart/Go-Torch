@@ -9,7 +9,7 @@ import type { UIState } from './types/ui'
 
 export default function App() {
   const [uid, setUid] = useState('')
-  const [state, setState] = useState<UIState | null>(null)
+  const [state, setUiState] = useState<UIState | null>(null)
   const [logPath, setLogPath] = useState('')
   const [readFromStart, setReadFromStart] = useState<boolean>(() => {
     try {
@@ -23,7 +23,7 @@ export default function App() {
   useEffect(() => {
     if (!hasRuntime()) return
     const rt = (window as any).runtime
-    const off = rt.EventsOn('state', (s: UIState) => setState(s))
+    const off = rt.EventsOn('state', (s: UIState) => setUiState(s))
     return () => {
       try { off() } catch {}
     }
