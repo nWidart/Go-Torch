@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -23,6 +26,9 @@ type App struct {
 	lines    chan string
 	cancel   context.CancelFunc
 	emitStop context.CancelFunc
+
+	// item table loaded from full_table.json
+	items map[string]ItemInfo
 }
 
 func New() *App {
@@ -32,11 +38,42 @@ func New() *App {
 // Startup is called by Wails when the app starts.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	// Load item metadata table on startup
+	a.loadItemTable()
 }
 
 // Shutdown is called by Wails when the app terminates.
 func (a *App) Shutdown(ctx context.Context) {
 	a.Stop()
+}
+
+// loadItemTable attempts to load full_table.json from common locations.
+func (a *App) loadItemTable() {
+	paths := []string{"full_table.json"}
+	if wd, err := os.Getwd(); err == nil {
+		p := filepath.Join(wd, "full_table.json")
+		if p != paths[0] {
+			paths = append(paths, p)
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		paths = append(paths, filepath.Join(dir, "full_table.json"))
+	}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var m map[string]ItemInfo
+		if err := json.Unmarshal(b, &m); err != nil {
+			continue
+		}
+		a.items = m
+		return
+	}
+	// fallback to empty map to avoid nil checks elsewhere
+	a.items = map[string]ItemInfo{}
 }
 
 // StartTracking starts tailing the given log path and emitting state updates to the UI.
@@ -157,10 +194,23 @@ func (a *App) GetState() UIState {
 // UIState converts internal tracker state to a JSON-friendly struct for the UI.
 func (a *App) UIState() UIState {
 	st := a.trk.GetState()
-	// convert tally keys to strings
-	uiTally := make(map[string]int, len(st.Current.Tally))
+	// Build UI tally by enriching with metadata and skipping unknowns
+	uiTally := make(map[string]UITallyItem)
 	for id, n := range st.Current.Tally {
-		uiTally[intToStr(id)] = n
+		key := intToStr(id)
+		if a.items == nil {
+			continue
+		}
+		if info, ok := a.items[key]; ok {
+			uiTally[key] = UITallyItem{
+				Name:       info.Name,
+				Type:       info.Type,
+				Price:      info.Price,
+				LastUpdate: info.LastUpdate,
+				From:       info.From,
+				Count:      n,
+			}
+		}
 	}
 	// convert recent events
 	recent := make([]UIEvent, 0, len(st.LastEvents))
@@ -177,13 +227,32 @@ func (a *App) UIState() UIState {
 	}
 }
 
+// ItemInfo represents an item entry from full_table.json
+type ItemInfo struct {
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Price      float64 `json:"price"`
+	LastUpdate float64 `json:"last_update"`
+	From       string  `json:"from"`
+}
+
+// UITallyItem is sent to the frontend for each counted item id
+type UITallyItem struct {
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Price      float64 `json:"price"`
+	LastUpdate float64 `json:"last_update"`
+	From       string  `json:"from"`
+	Count      int     `json:"count"`
+}
+
 type UIState struct {
-	InMap        bool           `json:"inMap"`
-	SessionStart int64          `json:"sessionStart"`
-	SessionEnd   int64          `json:"sessionEnd"`
-	TotalDrops   int            `json:"totalDrops"`
-	Tally        map[string]int `json:"tally"`
-	Recent       []UIEvent      `json:"recent"`
+	InMap        bool                   `json:"inMap"`
+	SessionStart int64                  `json:"sessionStart"`
+	SessionEnd   int64                  `json:"sessionEnd"`
+	TotalDrops   int                    `json:"totalDrops"`
+	Tally        map[string]UITallyItem `json:"tally"`
+	Recent       []UIEvent              `json:"recent"`
 }
 
 type UIEvent struct {

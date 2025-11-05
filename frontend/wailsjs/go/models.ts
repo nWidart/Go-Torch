@@ -14,12 +14,34 @@ export namespace app {
 	        this.kind = source["kind"];
 	    }
 	}
+	export class UITallyItem {
+	    name: string;
+	    type: string;
+	    price: number;
+	    last_update: number;
+	    from: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UITallyItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.price = source["price"];
+	        this.last_update = source["last_update"];
+	        this.from = source["from"];
+	        this.count = source["count"];
+	    }
+	}
 	export class UIState {
 	    inMap: boolean;
 	    sessionStart: number;
 	    sessionEnd: number;
 	    totalDrops: number;
-	    tally: Record<string, number>;
+	    tally: Record<string, UITallyItem>;
 	    recent: UIEvent[];
 	
 	    static createFrom(source: any = {}) {
@@ -32,7 +54,7 @@ export namespace app {
 	        this.sessionStart = source["sessionStart"];
 	        this.sessionEnd = source["sessionEnd"];
 	        this.totalDrops = source["totalDrops"];
-	        this.tally = source["tally"];
+	        this.tally = this.convertValues(source["tally"], UITallyItem, true);
 	        this.recent = this.convertValues(source["recent"], UIEvent);
 	    }
 	
