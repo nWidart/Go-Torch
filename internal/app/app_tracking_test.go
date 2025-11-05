@@ -25,6 +25,11 @@ func TestAppStartTrackingFromStartCountsDeltas(t *testing.T) {
 	a.Startup(ctx)
 	defer a.Stop()
 
+	// Provide minimal item metadata for item 1001
+	a.items = map[string]ItemInfo{
+		"1001": {Name: "Test Item", Type: "test", Price: 1.0},
+	}
+
 	if err := a.StartTrackingWithOptions(p, true); err != nil {
 		t.Fatalf("StartTrackingWithOptions: %v", err)
 	}
@@ -37,8 +42,8 @@ func TestAppStartTrackingFromStartCountsDeltas(t *testing.T) {
 	if st.TotalDrops != 4 {
 		t.Fatalf("expected total drops 4, got %d", st.TotalDrops)
 	}
-	if st.Tally["1001"] != 4 {
-		t.Fatalf("expected tally[1001]=4, got %d", st.Tally["1001"])
+	if st.Tally["1001"].Count != 4 {
+		t.Fatalf("expected tally[1001].Count=4, got %d", st.Tally["1001"].Count)
 	}
 
 	// Reset clears state

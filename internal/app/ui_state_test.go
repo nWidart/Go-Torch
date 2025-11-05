@@ -10,6 +10,10 @@ import (
 
 func TestUIStateConversion(t *testing.T) {
 	a := New()
+	// Provide minimal item metadata for item 5210
+	a.items = map[string]ItemInfo{
+		"5210": {Name: "Test Item", Type: "test", Price: 1.0},
+	}
 	// build some state via tracker events
 	start := time.Now().Add(-5 * time.Second)
 	a.trk.OnEvent(&types.Event{Kind: types.EventMapStart, Time: start})
@@ -23,8 +27,8 @@ func TestUIStateConversion(t *testing.T) {
 	if st.TotalDrops != 2 {
 		t.Fatalf("expected total drops 2, got %d", st.TotalDrops)
 	}
-	if st.Tally["5210"] != 2 {
-		t.Fatalf("expected tally[5210]=2, got %d", st.Tally["5210"])
+	if st.Tally["5210"].Count != 2 {
+		t.Fatalf("expected tally[5210]=2, got %d", st.Tally["5210"].Count)
 	}
 	if st.SessionStart == 0 {
 		t.Fatalf("expected non-zero session start")

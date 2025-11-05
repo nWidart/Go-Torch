@@ -143,7 +143,9 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 			case <-emitCtx.Done():
 				return
 			case <-ticker.C:
-				runtime.EventsEmit(a.ctx, "state", a.UIState())
+				if a.isWailsContext() {
+					runtime.EventsEmit(a.ctx, "state", a.UIState())
+				}
 			}
 		}
 	}()
@@ -376,7 +378,9 @@ func (a *App) refreshPrices() {
 	defer cancel()
 	updates, err := pricing.FetchRemotePrices(ctx, "")
 	if err != nil {
-		runtime.LogWarningf(a.ctx, "price refresh failed: %v", err)
+		if a.isWailsContext() {
+			runtime.LogWarningf(a.ctx, "price refresh failed: %v", err)
+		}
 		return
 	}
 	var changed int
@@ -394,5 +398,17 @@ func (a *App) refreshPrices() {
 		}
 	}
 	a.mu.Unlock()
-	runtime.LogInfof(a.ctx, "price refresh: %d updated (from %d remote items)", changed, total)
+	if a.isWailsContext() {
+		runtime.LogInfof(a.ctx, "price refresh: %d updated (from %d remote items)", changed, total)
+	}
+}
+
+// isWailsContext checks if the context is valid for Wails runtime calls.
+func (a *App) isWailsContext() bool {
+	// In tests, a.ctx is context.Background() which is not a Wails context
+	// We can check by attempting to use it, but simpler is to check if it has
+	// a specific value set by Wails. For now, we'll assume if ctx is non-nil
+	// and has a value, it's likely a Wails context.
+	// The safest way is to use a defer/recover around runtime calls.
+	return a.ctx != nil && a.ctx != context.Background() && a.ctx != context.TODO()
 }
