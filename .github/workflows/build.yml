@@ -47,6 +47,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'     # uses setup-node's cache support for npm/yarn/pnpm
+          cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Go mod tidy
         run: go mod tidy
