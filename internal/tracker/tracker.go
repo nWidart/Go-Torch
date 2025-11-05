@@ -21,12 +21,17 @@ type MapSession struct {
 	Tally map[int]int
 }
 
+// State holds the overall tracking state across the whole run ("session").
+// A session spans multiple maps from the first MapStart after Reset until Stop/Reset.
 type State struct {
-	InMap      bool
-	Current    MapSession
-	TotalDrops int
-	LastEvents []types.Event
-	Inventory  map[slotKey]int // latest known counts per slot+item
+	InMap            bool
+	Current          MapSession
+	Completed        []MapSession
+	SessionStartedAt time.Time
+	SessionEndedAt   time.Time
+	TotalDrops       int
+	LastEvents       []types.Event
+	Inventory        map[slotKey]int // latest known counts per slot+item
 }
 
 type Tracker struct {
@@ -45,16 +50,19 @@ func (t *Tracker) GetState() State {
 	defer t.mu.Unlock()
 	// Deep-ish copy for safe reading
 	st := State{
-		InMap:      t.state.InMap,
-		TotalDrops: t.state.TotalDrops,
-		Inventory:  make(map[slotKey]int, len(t.state.Inventory)),
-		LastEvents: make([]types.Event, len(t.state.LastEvents)),
+		InMap:            t.state.InMap,
+		TotalDrops:       t.state.TotalDrops,
+		Inventory:        make(map[slotKey]int, len(t.state.Inventory)),
+		LastEvents:       make([]types.Event, len(t.state.LastEvents)),
+		SessionStartedAt: t.state.SessionStartedAt,
+		SessionEndedAt:   t.state.SessionEndedAt,
 		Current: MapSession{
 			StartedAt: t.state.Current.StartedAt,
 			EndedAt:   t.state.Current.EndedAt,
 			Active:    t.state.Current.Active,
 			Tally:     make(map[int]int, len(t.state.Current.Tally)),
 		},
+		Completed: make([]MapSession, 0, len(t.state.Completed)),
 	}
 	for k, v := range t.state.Inventory {
 		st.Inventory[k] = v
@@ -62,6 +70,18 @@ func (t *Tracker) GetState() State {
 	copy(st.LastEvents, t.state.LastEvents)
 	for k, v := range t.state.Current.Tally {
 		st.Current.Tally[k] = v
+	}
+	for _, m := range t.state.Completed {
+		cm := MapSession{
+			StartedAt: m.StartedAt,
+			EndedAt:   m.EndedAt,
+			Active:    m.Active,
+			Tally:     make(map[int]int, len(m.Tally)),
+		}
+		for k, v := range m.Tally {
+			cm.Tally[k] = v
+		}
+		st.Completed = append(st.Completed, cm)
 	}
 	return st
 }
@@ -88,12 +108,17 @@ func (t *Tracker) OnEvent(ev *types.Event) {
 
 	switch ev.Kind {
 	case types.EventMapStart:
-		// Start a new session; if one is active, finalize it first
+		// Start a new map; if one is active, finalize it first and store it
 		if t.state.InMap && t.state.Current.Active {
 			s := t.state.Current
 			s.Active = false
 			s.EndedAt = ev.Time
-			t.state.Current = s
+			// append completed map
+			t.state.Completed = append(t.state.Completed, s)
+		}
+		// set session start if this is the first map after reset
+		if t.state.SessionStartedAt.IsZero() {
+			t.state.SessionStartedAt = ev.Time
 		}
 		t.state.InMap = true
 		t.state.Current = MapSession{StartedAt: ev.Time, Active: true, Tally: make(map[int]int)}
@@ -103,6 +128,11 @@ func (t *Tracker) OnEvent(ev *types.Event) {
 			s := t.state.Current
 			s.Active = false
 			s.EndedAt = ev.Time
+			// append to completed
+			t.state.Completed = append(t.state.Completed, s)
+			// set session end
+			t.state.SessionEndedAt = ev.Time
+			// reset current
 			t.state.Current = s
 		}
 	case types.EventBagInit:

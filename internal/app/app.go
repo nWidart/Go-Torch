@@ -212,18 +212,79 @@ func (a *App) UIState() UIState {
 			}
 		}
 	}
+	// Compute per-map earnings for completed maps + current
+	maps := make([]UIMap, 0, len(st.Completed)+1)
+	var sessionEarnings float64
+	var totalMapDurMs int64
+	for _, m := range st.Completed {
+		var earn float64
+		for id, c := range m.Tally {
+			key := intToStr(id)
+			if info, ok := a.items[key]; ok {
+				earn += float64(c) * info.Price
+			}
+		}
+		durMs := m.EndedAt.Sub(m.StartedAt).Milliseconds()
+		maps = append(maps, UIMap{Start: m.StartedAt.UnixMilli(), End: m.EndedAt.UnixMilli(), DurationMs: durMs, Earnings: earn})
+		sessionEarnings += earn
+		totalMapDurMs += durMs
+	}
+	// current map earnings
+	var currentEarn float64
+	for id, c := range st.Current.Tally {
+		key := intToStr(id)
+		if info, ok := a.items[key]; ok {
+			currentEarn += float64(c) * info.Price
+		}
+	}
+	// include current map as last entry only if active (avoid duplicating a completed current)
+	if st.Current.Active && !st.Current.StartedAt.IsZero() {
+		end := time.Now()
+		durMs := end.Sub(st.Current.StartedAt).Milliseconds()
+		maps = append(maps, UIMap{Start: st.Current.StartedAt.UnixMilli(), End: 0, DurationMs: durMs, Earnings: currentEarn})
+	}
+	sessionEarnings += currentEarn
+	// compute earnings per hour over session duration
+	var sessionStartMs int64
+	var sessionEndMs int64
+	if !st.SessionStartedAt.IsZero() {
+		sessionStartMs = st.SessionStartedAt.UnixMilli()
+		if !st.SessionEndedAt.IsZero() && !st.Current.Active {
+			sessionEndMs = st.SessionEndedAt.UnixMilli()
+		} else {
+			sessionEndMs = time.Now().UnixMilli()
+		}
+	}
+	var eph float64
+	if sessionStartMs > 0 && sessionEndMs > sessionStartMs {
+		durH := float64(sessionEndMs-sessionStartMs) / 3600000.0
+		if durH > 0 {
+			eph = sessionEarnings / durH
+		}
+	}
+	// average time per completed map
+	var avgMapMs int64
+	if len(st.Completed) > 0 {
+		avgMapMs = totalMapDurMs / int64(len(st.Completed))
+	}
 	// convert recent events
 	recent := make([]UIEvent, 0, len(st.LastEvents))
 	for _, ev := range st.LastEvents {
 		recent = append(recent, UIEvent{Time: ev.Time.UnixMilli(), Kind: ev.Kind.String()})
 	}
 	return UIState{
-		InMap:        st.InMap && st.Current.Active,
-		SessionStart: st.Current.StartedAt.UnixMilli(),
-		SessionEnd:   st.Current.EndedAt.UnixMilli(),
-		TotalDrops:   st.TotalDrops,
-		Tally:        uiTally,
-		Recent:       recent,
+		InMap:              st.InMap && st.Current.Active,
+		SessionStart:       sessionStartMs,
+		SessionEnd:         sessionEndMs,
+		MapStart:           st.Current.StartedAt.UnixMilli(),
+		MapEnd:             st.Current.EndedAt.UnixMilli(),
+		TotalDrops:         st.TotalDrops,
+		Tally:              uiTally,
+		Recent:             recent,
+		Maps:               maps,
+		EarningsPerSession: sessionEarnings,
+		EarningsPerHour:    eph,
+		AvgMapTimeMs:       avgMapMs,
 	}
 }
 
@@ -246,13 +307,26 @@ type UITallyItem struct {
 	Count      int     `json:"count"`
 }
 
+type UIMap struct {
+	Start      int64   `json:"start"`
+	End        int64   `json:"end"`
+	DurationMs int64   `json:"durationMs"`
+	Earnings   float64 `json:"earnings"`
+}
+
 type UIState struct {
-	InMap        bool                   `json:"inMap"`
-	SessionStart int64                  `json:"sessionStart"`
-	SessionEnd   int64                  `json:"sessionEnd"`
-	TotalDrops   int                    `json:"totalDrops"`
-	Tally        map[string]UITallyItem `json:"tally"`
-	Recent       []UIEvent              `json:"recent"`
+	InMap              bool                   `json:"inMap"`
+	SessionStart       int64                  `json:"sessionStart"`
+	SessionEnd         int64                  `json:"sessionEnd"`
+	MapStart           int64                  `json:"mapStart"`
+	MapEnd             int64                  `json:"mapEnd"`
+	TotalDrops         int                    `json:"totalDrops"`
+	Tally              map[string]UITallyItem `json:"tally"`
+	Recent             []UIEvent              `json:"recent"`
+	Maps               []UIMap                `json:"maps"`
+	EarningsPerSession float64                `json:"earningsPerSession"`
+	EarningsPerHour    float64                `json:"earningsPerHour"`
+	AvgMapTimeMs       int64                  `json:"avgMapTimeMs"`
 }
 
 type UIEvent struct {

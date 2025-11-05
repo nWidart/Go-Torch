@@ -9,11 +9,24 @@ export type UITallyItem = {
   count: number
 }
 
+export type UIMap = {
+  start: number
+  end: number
+  durationMs: number
+  earnings: number
+}
+
 export type UIState = {
   inMap: boolean
   sessionStart: number
   sessionEnd: number
+  mapStart: number
+  mapEnd: number
   totalDrops: number
   tally: Record<string, UITallyItem>
   recent: UIEvent[]
+  maps: UIMap[]
+  earningsPerSession: number
+  earningsPerHour: number
+  avgMapTimeMs: number
 }

@@ -14,6 +14,24 @@ export namespace app {
 	        this.kind = source["kind"];
 	    }
 	}
+	export class UIMap {
+	    start: number;
+	    end: number;
+	    durationMs: number;
+	    earnings: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UIMap(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.durationMs = source["durationMs"];
+	        this.earnings = source["earnings"];
+	    }
+	}
 	export class UITallyItem {
 	    name: string;
 	    type: string;
@@ -40,9 +58,15 @@ export namespace app {
 	    inMap: boolean;
 	    sessionStart: number;
 	    sessionEnd: number;
+	    mapStart: number;
+	    mapEnd: number;
 	    totalDrops: number;
 	    tally: Record<string, UITallyItem>;
 	    recent: UIEvent[];
+	    maps: UIMap[];
+	    earningsPerSession: number;
+	    earningsPerHour: number;
+	    avgMapTimeMs: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UIState(source);
@@ -53,9 +77,15 @@ export namespace app {
 	        this.inMap = source["inMap"];
 	        this.sessionStart = source["sessionStart"];
 	        this.sessionEnd = source["sessionEnd"];
+	        this.mapStart = source["mapStart"];
+	        this.mapEnd = source["mapEnd"];
 	        this.totalDrops = source["totalDrops"];
 	        this.tally = this.convertValues(source["tally"], UITallyItem, true);
 	        this.recent = this.convertValues(source["recent"], UIEvent);
+	        this.maps = this.convertValues(source["maps"], UIMap);
+	        this.earningsPerSession = source["earningsPerSession"];
+	        this.earningsPerHour = source["earningsPerHour"];
+	        this.avgMapTimeMs = source["avgMapTimeMs"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
