@@ -9,10 +9,11 @@ export type WelcomeSectionProps = {
   readFromStart: boolean
   onToggleReadFromStart: (v: boolean) => void
   onStart: () => void
+  selectLogFile: () => void
 }
 
 export default function WelcomeSection(props: WelcomeSectionProps) {
-  const { uid, onUidChange, logPath, onLogPathChange, readFromStart, onToggleReadFromStart, onStart } = props
+  const { uid, onUidChange, logPath, onLogPathChange, readFromStart, onToggleReadFromStart, onStart, selectLogFile } = props
   return (
     <section style={card}>
       <h2 style={h2}>Welcome</h2>
@@ -20,6 +21,7 @@ export default function WelcomeSection(props: WelcomeSectionProps) {
         <label>User ID:</label>
         <input value={uid} onChange={e => onUidChange(e.target.value)} placeholder="Enter user id (no-op)" style={inputStyle} />
         <label>Log Path:</label>
+        <button onClick={() => selectLogFile()}>Select log file</button>
         <input value={logPath} onChange={e => onLogPathChange(e.target.value)} placeholder="Select or paste UE_game.log path" style={inputStyle} />
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={readFromStart} onChange={e => onToggleReadFromStart(e.target.checked)} />

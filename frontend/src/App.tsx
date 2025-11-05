@@ -29,6 +29,19 @@ export default function App() {
     }
   }, [])
 
+  const selectLogFile = async () => {
+    if (!hasRuntime()) return
+    try {
+      const backend = getBackend()
+      if (!backend) throw new Error('Backend not available')
+      const path = await backend.SelectLogFile()
+      if (!path) return
+      setLogPath(path)
+    } catch (e) {
+      console.error('Failed to select log file: ' + e)
+    }
+  }
+
   const startTracking = async () => {
     if (!hasRuntime()) return alert('This UI must be run via Wails to access backend.')
     try {
@@ -78,6 +91,7 @@ export default function App() {
         readFromStart={readFromStart}
         onToggleReadFromStart={setReadFromStart}
         onStart={startTracking}
+        selectLogFile={selectLogFile}
       />
 
       <StatsPanel state={state} />
