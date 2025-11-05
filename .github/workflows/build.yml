@@ -34,7 +34,7 @@ jobs:
           GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -trimpath -ldflags="-s -w" -o build/bin/gotorch-cli-${GOOS}-${GOARCH} ./cmd/cli
 
       - name: Install GTK and Webkit dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libglib2.0-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-dev libglib2.0-dev gcc-aarch64-linux-gnu
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install Wails
