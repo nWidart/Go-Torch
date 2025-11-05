@@ -36,6 +36,10 @@ type App struct {
 	trackPausedAccum time.Duration
 	lastEventAt      time.Time // last parsed event time, used to clamp durations when parsing old logs
 
+	// baseline of current map tally at the moment the session started (if session started mid‑map)
+	baselineTally    map[int]int
+	baselineMapStart time.Time
+
 	// item table loaded from full_table.json (or embedded fallback)
 	items       map[string]ItemInfo
 	itemsSource string // diagnostic: where items were loaded from
@@ -147,6 +151,18 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 	a.trackPaused = false
 	a.trackPausedAt = time.Time{}
 	a.trackPausedAccum = 0
+	// snapshot baseline tally if we are already in a map when starting (e.g., starting mid‑map)
+	st0 := a.trk.GetState()
+	if st0.InMap && st0.Current.Tally != nil {
+		a.baselineTally = make(map[int]int, len(st0.Current.Tally))
+		for id, c := range st0.Current.Tally {
+			a.baselineTally[id] = c
+		}
+		a.baselineMapStart = st0.Current.StartedAt
+	} else {
+		a.baselineTally = nil
+		a.baselineMapStart = time.Time{}
+	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancel = cancel
@@ -238,6 +254,9 @@ func (a *App) Reset() {
 	a.trackPaused = false
 	a.trackPausedAt = time.Time{}
 	a.trackPausedAccum = 0
+	// clear any baseline captured at session start
+	a.baselineTally = nil
+	a.baselineMapStart = time.Time{}
 }
 
 // PauseSession pauses the app-level session timer.
