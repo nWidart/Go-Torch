@@ -41,7 +41,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      # --- Cache NPM (via setup-node cache) ---
       - name: Setup Node (and enable cache)
         uses: actions/setup-node@v4
         with:
@@ -59,6 +58,30 @@ jobs:
       - id: wails-build
         name: Build Wails app
         run: wails build
+
+      - name: Run tests with coverage
+        run: |
+          go test ./... -race -covermode=atomic -coverprofile=coverage.out
+      - name: Enforce coverage >= 80%
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/total:/ {print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: ${total}%"
+          # Compare as integer by truncating
+          t=${total%.*}
+          if [ "$t" -lt 80 ]; then
+            echo "Coverage $total% is below required 80%" >&2
+            exit 1
+          fi
+      - name: Check gofmt
+        run: |
+          fmtout=$(gofmt -s -l . | tee /dev/stderr)
+          if [ -n "$fmtout" ]; then
+            echo "The following files are not gofmt'd:" >&2
+            echo "$fmtout" >&2
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
 
       - name: Go mod tidy
         if: steps.wails-build.outcome == 'success'
