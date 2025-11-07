@@ -16,8 +16,8 @@ export default function App() {
       const saved = localStorage.getItem('readFromStart')
       if (saved !== null) return saved === '1'
     } catch {}
-    // Default: in dev, read old lines; in prod, tail only
-    return import.meta.env.DEV
+    // Default: never read old lines; always tail from end to avoid historical data affecting timers
+    return false
   })
 
   useEffect(() => {

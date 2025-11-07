@@ -134,6 +134,10 @@ func (a *App) startTrackingInternal(logPath string, fromStart bool) error {
 		a.emitStop = nil
 	}
 
+	// Reset tracker state on each (re)start so timers always begin from fresh events
+	// and no historical state is carried over.
+	a.trk = tracker.New()
+
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancel = cancel
 
@@ -313,12 +317,21 @@ func (a *App) UIState() UIState {
 	for _, ev := range st.LastEvents {
 		recent = append(recent, UIEvent{Time: ev.Time.UnixMilli(), Kind: ev.Kind.String()})
 	}
+	// Map start/end: emit 0 when unset to avoid negative epoch values in UI
+	var mapStartMs int64
+	var mapEndMs int64
+	if !st.Current.StartedAt.IsZero() {
+		mapStartMs = st.Current.StartedAt.UnixMilli()
+	}
+	if !st.Current.EndedAt.IsZero() {
+		mapEndMs = st.Current.EndedAt.UnixMilli()
+	}
 	return UIState{
 		InMap:              st.InMap && st.Current.Active,
 		SessionStart:       sessionStartMs,
 		SessionEnd:         sessionEndMs,
-		MapStart:           st.Current.StartedAt.UnixMilli(),
-		MapEnd:             st.Current.EndedAt.UnixMilli(),
+		MapStart:           mapStartMs,
+		MapEnd:             mapEndMs,
 		TotalDrops:         st.TotalDrops,
 		Tally:              uiTally,
 		Recent:             recent,
